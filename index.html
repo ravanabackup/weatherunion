@@ -146,9 +146,9 @@
             text-align: center;
         }
 
-        .chart {
-            width: 100%;
-            height: 200px;
+        .chart-canvas {
+            width: 100% !important;
+            height: 200px !important;
             border-radius: 10px;
             background: white;
             border: 1px solid #ddd;
@@ -174,6 +174,29 @@
             margin-top: 20px;
             color: rgba(255,255,255,0.8);
             font-size: 0.9rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-live {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-demo {
+            background: #ffc107;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
 
         @media (max-width: 768px) {
@@ -211,22 +234,22 @@
             <div class="charts-grid">
                 <div class="chart-container">
                     <div class="chart-title">🌡️ Temperature (°C)</div>
-                    <canvas id="temperatureChart" class="chart"></canvas>
+                    <canvas id="temperatureChart" class="chart-canvas"></canvas>
                 </div>
                 
                 <div class="chart-container">
                     <div class="chart-title">🌧️ Rain Intensity</div>
-                    <canvas id="rainChart" class="chart"></canvas>
+                    <canvas id="rainChart" class="chart-canvas"></canvas>
                 </div>
                 
                 <div class="chart-container">
                     <div class="chart-title">💧 Humidity (%)</div>
-                    <canvas id="humidityChart" class="chart"></canvas>
+                    <canvas id="humidityChart" class="chart-canvas"></canvas>
                 </div>
                 
                 <div class="chart-container">
                     <div class="chart-title">💨 Wind Speed (km/h)</div>
-                    <canvas id="windChart" class="chart"></canvas>
+                    <canvas id="windChart" class="chart-canvas"></canvas>
                 </div>
             </div>
         </div>
@@ -236,6 +259,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script>
+        // Configuration
         const locations = [
             { name: 'Sector 15 (Chandigarh)', id: 'ZWL007561' },
             { name: 'Sector 8 (Chandigarh)', id: 'ZWL006687' },
@@ -247,9 +271,12 @@
         const API_KEY = '40597c2d1c1345d498232d88d7ab1dde';
         const BASE_URL = 'https://www.weatherunion.com/gw/weather/external/v0/get_locality_weather_data';
 
+        // Global variables
         let weatherData = {};
         let charts = {};
+        let isLiveData = false;
 
+        // Utility functions
         function getWeatherIcon(type) {
             const icons = {
                 temperature: '🌡️',
@@ -262,6 +289,8 @@
         }
 
         function formatValue(value, type) {
+            if (value === null || value === undefined) return 'N/A';
+            
             switch(type) {
                 case 'temperature':
                     return `${value.toFixed(1)}°C`;
@@ -278,9 +307,21 @@
             }
         }
 
+        function generateMockWeatherData() {
+            return {
+                temperature: 20 + Math.random() * 15, // 20-35°C
+                humidity: 40 + Math.random() * 40, // 40-80%
+                wind_speed: 1 + Math.random() * 12, // 1-13 km/h
+                wind_direction: Math.random() * 360,
+                rain_intensity: Math.random() * 3, // 0-3mm
+                rain_accumulation: Math.random() * 10,
+                aqi_pm_2_point_5: 30 + Math.random() * 120,
+                aqi_pm_10: 25 + Math.random() * 100
+            };
+        }
+
         async function fetchWeatherData(locationId) {
             try {
-                // Try to fetch from API first
                 const response = await fetch(`${BASE_URL}?locality_id=${locationId}`, {
                     headers: {
                         'X-Zomato-Api-Key': API_KEY
@@ -292,26 +333,12 @@
                 }
                 
                 const data = await response.json();
+                isLiveData = true;
                 return data.locality_weather_data;
             } catch (error) {
-                console.error(`Error fetching data for ${locationId}:`, error);
-                // Return mock data when API fails (due to CORS or other issues)
+                console.warn(`Using mock data for ${locationId} due to:`, error.message);
                 return generateMockWeatherData();
             }
-        }
-
-        function generateMockWeatherData() {
-            // Generate realistic mock weather data for Chandigarh
-            return {
-                temperature: 25 + (Math.random() - 0.5) * 10, // 20-30°C range
-                humidity: 60 + (Math.random() - 0.5) * 40, // 40-80% range
-                wind_speed: 2 + Math.random() * 8, // 2-10 km/h range
-                wind_direction: Math.random() * 360,
-                rain_intensity: Math.random() * 2, // 0-2mm range
-                rain_accumulation: Math.random() * 5,
-                aqi_pm_2_point_5: 50 + Math.random() * 100,
-                aqi_pm_10: 40 + Math.random() * 80
-            };
         }
 
         function createLocationCard(location, data) {
@@ -356,18 +383,25 @@
                 time.setHours(time.getHours() - i);
                 labels.push(time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
                 
-                // Generate realistic variations around current value
-                const variation = (Math.random() - 0.5) * 0.3 * currentValue;
+                // Generate realistic variations
+                const variation = (Math.random() - 0.5) * 0.4 * currentValue;
                 const value = Math.max(0, currentValue + variation);
-                data.push(value);
+                data.push(parseFloat(value.toFixed(2)));
             }
             
             return { labels, data };
         }
 
         function createChart(canvasId, label, data, color) {
-            const ctx = document.getElementById(canvasId).getContext('2d');
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) {
+                console.error(`Canvas element ${canvasId} not found`);
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
             
+            // Destroy existing chart if it exists
             if (charts[canvasId]) {
                 charts[canvasId].destroy();
             }
@@ -384,17 +418,26 @@
                         fill: true,
                         tension: 0.4,
                         pointRadius: 4,
-                        pointHoverRadius: 6
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: color,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000
+                    },
                     scales: {
                         x: {
                             display: true,
                             grid: {
                                 display: false
+                            },
+                            ticks: {
+                                maxTicksLimit: 6
                             }
                         },
                         y: {
@@ -408,26 +451,43 @@
                     plugins: {
                         legend: {
                             display: false
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: color,
+                            borderWidth: 1
                         }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
                     }
                 }
             });
         }
 
         function updateCharts() {
-            // Calculate average values across all locations
-            const avgTemp = Object.values(weatherData).reduce((sum, data) => sum + (data?.temperature || 0), 0) / Object.keys(weatherData).length;
-            const avgHumidity = Object.values(weatherData).reduce((sum, data) => sum + (data?.humidity || 0), 0) / Object.keys(weatherData).length;
-            const avgWind = Object.values(weatherData).reduce((sum, data) => sum + (data?.wind_speed || 0), 0) / Object.keys(weatherData).length;
-            const avgRain = Object.values(weatherData).reduce((sum, data) => sum + (data?.rain_intensity || 0), 0) / Object.keys(weatherData).length;
+            const dataValues = Object.values(weatherData);
+            if (dataValues.length === 0) return;
+
+            // Calculate averages
+            const avgTemp = dataValues.reduce((sum, data) => sum + (data?.temperature || 0), 0) / dataValues.length;
+            const avgHumidity = dataValues.reduce((sum, data) => sum + (data?.humidity || 0), 0) / dataValues.length;
+            const avgWind = dataValues.reduce((sum, data) => sum + (data?.wind_speed || 0), 0) / dataValues.length;
+            const avgRain = dataValues.reduce((sum, data) => sum + (data?.rain_intensity || 0), 0) / dataValues.length;
             
-            // Wait for DOM to be ready
+            // Create charts with delay to ensure DOM is ready
             setTimeout(() => {
                 createChart('temperatureChart', 'Temperature (°C)', generateHistoricalData(avgTemp), '#ff6b6b');
                 createChart('rainChart', 'Rain Intensity', generateHistoricalData(avgRain), '#4ecdc4');
                 createChart('humidityChart', 'Humidity (%)', generateHistoricalData(avgHumidity), '#45b7d1');
                 createChart('windChart', 'Wind Speed (km/h)', generateHistoricalData(avgWind), '#96ceb4');
-            }, 100);
+            }, 500);
         }
 
         async function loadWeatherData() {
@@ -435,10 +495,17 @@
             locationsGrid.innerHTML = '<div class="loading">Loading weather data...</div>';
             
             weatherData = {};
+            isLiveData = false;
             
+            // Load data for all locations
             for (const location of locations) {
-                const data = await fetchWeatherData(location.id);
-                weatherData[location.id] = data;
+                try {
+                    const data = await fetchWeatherData(location.id);
+                    weatherData[location.id] = data;
+                } catch (error) {
+                    console.error(`Failed to load data for ${location.name}:`, error);
+                    weatherData[location.id] = generateMockWeatherData();
+                }
             }
             
             // Clear loading message
@@ -453,16 +520,37 @@
             // Update charts
             updateCharts();
             
-            // Update last updated time
-            document.getElementById('lastUpdated').textContent = 
-                `Last updated: ${new Date().toLocaleString()}`;
+            // Update status
+            const statusIcon = isLiveData ? 
+                '<span class="status-indicator status-live"></span>Live Data' : 
+                '<span class="status-indicator status-demo"></span>Demo Data';
+            
+            document.getElementById('lastUpdated').innerHTML = 
+                `${statusIcon} - Last updated: ${new Date().toLocaleString()}`;
         }
 
-        // Initialize the dashboard
-        loadWeatherData();
-        
-        // Refresh data every 5 minutes
-        setInterval(loadWeatherData, 5 * 60 * 1000);
+        // Initialize when page loads
+        function init() {
+            // Check if Chart.js is loaded
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js not loaded');
+                setTimeout(init, 1000);
+                return;
+            }
+            
+            // Load weather data
+            loadWeatherData();
+            
+            // Set up refresh interval (every 5 minutes)
+            setInterval(loadWeatherData, 5 * 60 * 1000);
+        }
+
+        // Start the application
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>

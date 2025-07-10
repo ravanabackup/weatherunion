@@ -289,54 +289,86 @@
         }
 
         function formatValue(value, type) {
-            if (value === null || value === undefined) return 'N/A';
+            if (value === null || value === undefined || isNaN(value)) return 'N/A';
+            
+            const numValue = parseFloat(value);
             
             switch(type) {
                 case 'temperature':
-                    return `${value.toFixed(1)}°C`;
+                    return `${numValue.toFixed(1)}°C`;
                 case 'humidity':
-                    return `${value.toFixed(1)}%`;
+                    return `${numValue.toFixed(1)}%`;
                 case 'wind':
-                    return `${value.toFixed(1)} km/h`;
+                    return `${numValue.toFixed(1)} km/h`;
                 case 'rain':
-                    return `${value.toFixed(1)} mm`;
+                    return `${numValue.toFixed(1)} mm`;
                 case 'aqi':
-                    return Math.round(value);
+                    return Math.round(numValue);
                 default:
-                    return value.toFixed(1);
+                    return numValue.toFixed(1);
             }
         }
 
         function generateMockWeatherData() {
+            const now = new Date();
+            const baseTemp = 15 + Math.random() * 20; // 15-35°C
+            const baseHumidity = 40 + Math.random() * 40; // 40-80%
+            const baseWind = 2 + Math.random() * 10; // 2-12 km/h
+            const baseRain = Math.random() * 5; // 0-5mm
+            
             return {
-                temperature: 20 + Math.random() * 15, // 20-35°C
-                humidity: 40 + Math.random() * 40, // 40-80%
-                wind_speed: 1 + Math.random() * 12, // 1-13 km/h
-                wind_direction: Math.random() * 360,
-                rain_intensity: Math.random() * 3, // 0-3mm
-                rain_accumulation: Math.random() * 10,
-                aqi_pm_2_point_5: 30 + Math.random() * 120,
-                aqi_pm_10: 25 + Math.random() * 100
+                temperature: baseTemp,
+                humidity: baseHumidity,
+                wind_speed: baseWind,
+                wind_direction: Math.floor(Math.random() * 360),
+                rain_intensity: baseRain,
+                rain_accumulation: baseRain * (1 + Math.random()),
+                aqi: Math.floor(30 + Math.random() * 120),
+                pressure: 1000 + Math.random() * 50,
+                uv_index: Math.floor(Math.random() * 11),
+                timestamp: now.toISOString()
             };
         }
 
         async function fetchWeatherData(locationId) {
             try {
+                console.log(`Fetching weather data for ${locationId}...`);
+                
                 const response = await fetch(`${BASE_URL}?locality_id=${locationId}`, {
+                    method: 'GET',
                     headers: {
-                        'X-Zomato-Api-Key': API_KEY
+                        'X-Zomato-Api-Key': API_KEY,
+                        'Content-Type': 'application/json'
                     }
                 });
+                
+                console.log(`Response status for ${locationId}: ${response.status}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
-                isLiveData = true;
-                return data.locality_weather_data;
+                console.log(`Data received for ${locationId}:`, data);
+                
+                // Check if we have valid weather data
+                if (data && data.locality_weather_data) {
+                    const weatherInfo = data.locality_weather_data;
+                    
+                    // Validate that we have actual weather values
+                    if (weatherInfo.temperature !== null && 
+                        weatherInfo.humidity !== null && 
+                        weatherInfo.wind_speed !== null) {
+                        
+                        isLiveData = true;
+                        return weatherInfo;
+                    }
+                }
+                
+                throw new Error('Invalid or null weather data received');
+                
             } catch (error) {
-                console.warn(`Using mock data for ${locationId} due to:`, error.message);
+                console.warn(`API failed for ${locationId}, using mock data:`, error.message);
                 return generateMockWeatherData();
             }
         }
@@ -345,27 +377,33 @@
             const card = document.createElement('div');
             card.className = 'location-card';
             
+            // Safely extract values with fallbacks
+            const temp = data?.temperature ?? null;
+            const humidity = data?.humidity ?? null;
+            const windSpeed = data?.wind_speed ?? null;
+            const rainIntensity = data?.rain_intensity ?? null;
+            
             card.innerHTML = `
                 <div class="location-name">${location.name}</div>
                 <div class="weather-grid">
                     <div class="weather-item">
                         <span class="weather-icon">${getWeatherIcon('temperature')}</span>
-                        <div class="weather-value">${formatValue(data.temperature, 'temperature')}</div>
+                        <div class="weather-value">${formatValue(temp, 'temperature')}</div>
                         <div class="weather-label">Temperature</div>
                     </div>
                     <div class="weather-item">
                         <span class="weather-icon">${getWeatherIcon('humidity')}</span>
-                        <div class="weather-value">${formatValue(data.humidity, 'humidity')}</div>
+                        <div class="weather-value">${formatValue(humidity, 'humidity')}</div>
                         <div class="weather-label">Humidity</div>
                     </div>
                     <div class="weather-item">
                         <span class="weather-icon">${getWeatherIcon('wind')}</span>
-                        <div class="weather-value">${formatValue(data.wind_speed, 'wind')}</div>
+                        <div class="weather-value">${formatValue(windSpeed, 'wind')}</div>
                         <div class="weather-label">Wind Speed</div>
                     </div>
                     <div class="weather-item">
                         <span class="weather-icon">${getWeatherIcon('rain')}</span>
-                        <div class="weather-value">${formatValue(data.rain_intensity, 'rain')}</div>
+                        <div class="weather-value">${formatValue(rainIntensity, 'rain')}</div>
                         <div class="weather-label">Rain Intensity</div>
                     </div>
                 </div>
@@ -378,14 +416,18 @@
             const data = [];
             const labels = [];
             
+            // Use a default value if currentValue is null/undefined
+            const baseValue = currentValue || 0;
+            
             for (let i = hours; i >= 0; i--) {
                 const time = new Date();
                 time.setHours(time.getHours() - i);
                 labels.push(time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
                 
-                // Generate realistic variations
-                const variation = (Math.random() - 0.5) * 0.4 * currentValue;
-                const value = Math.max(0, currentValue + variation);
+                // Generate realistic variations around the base value
+                const variationPercent = (Math.random() - 0.5) * 0.3; // ±15% variation
+                const variation = baseValue * variationPercent;
+                const value = Math.max(0, baseValue + variation);
                 data.push(parseFloat(value.toFixed(2)));
             }
             
@@ -475,11 +517,16 @@
             const dataValues = Object.values(weatherData);
             if (dataValues.length === 0) return;
 
-            // Calculate averages
-            const avgTemp = dataValues.reduce((sum, data) => sum + (data?.temperature || 0), 0) / dataValues.length;
-            const avgHumidity = dataValues.reduce((sum, data) => sum + (data?.humidity || 0), 0) / dataValues.length;
-            const avgWind = dataValues.reduce((sum, data) => sum + (data?.wind_speed || 0), 0) / dataValues.length;
-            const avgRain = dataValues.reduce((sum, data) => sum + (data?.rain_intensity || 0), 0) / dataValues.length;
+            // Calculate averages with proper null handling
+            const validTemps = dataValues.filter(d => d?.temperature != null).map(d => d.temperature);
+            const validHumidity = dataValues.filter(d => d?.humidity != null).map(d => d.humidity);
+            const validWind = dataValues.filter(d => d?.wind_speed != null).map(d => d.wind_speed);
+            const validRain = dataValues.filter(d => d?.rain_intensity != null).map(d => d.rain_intensity);
+            
+            const avgTemp = validTemps.length > 0 ? validTemps.reduce((a, b) => a + b, 0) / validTemps.length : 25;
+            const avgHumidity = validHumidity.length > 0 ? validHumidity.reduce((a, b) => a + b, 0) / validHumidity.length : 60;
+            const avgWind = validWind.length > 0 ? validWind.reduce((a, b) => a + b, 0) / validWind.length : 8;
+            const avgRain = validRain.length > 0 ? validRain.reduce((a, b) => a + b, 0) / validRain.length : 1;
             
             // Create charts with delay to ensure DOM is ready
             setTimeout(() => {
@@ -502,6 +549,7 @@
                 try {
                     const data = await fetchWeatherData(location.id);
                     weatherData[location.id] = data;
+                    console.log(`Loaded data for ${location.name}:`, data);
                 } catch (error) {
                     console.error(`Failed to load data for ${location.name}:`, error);
                     weatherData[location.id] = generateMockWeatherData();
@@ -533,10 +581,12 @@
         function init() {
             // Check if Chart.js is loaded
             if (typeof Chart === 'undefined') {
-                console.error('Chart.js not loaded');
+                console.error('Chart.js not loaded, retrying...');
                 setTimeout(init, 1000);
                 return;
             }
+            
+            console.log('Initializing WeatherUnion Dashboard...');
             
             // Load weather data
             loadWeatherData();

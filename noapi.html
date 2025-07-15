@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -603,7 +604,7 @@
 
     <script>
         // API endpoint for city weather data
-        const API_URL = 'https://www.weatherunion.com/gw/weather/service/get_city_weather_data?city_id=ZWC000133';
+        const API_URL = 'https://api.allorigins.win/raw?url=https://www.weatherunion.com/gw/weather/service/get_city_weather_data?city_id=ZWC000133';
 
         let currentTheme = 'dark';
         let isLoading = false;
@@ -724,65 +725,70 @@
             return '☁️';
         }
 
-        // Create location card HTML
-        function createLocationCard(localityDetail, weatherDetail) {
-            const rainAccumulation = weatherDetail.rain_accumulation || 0;
-            const rainIntensity = weatherDetail.rain_intensity || 0;
-            const rainStatus = getRainStatus(rainAccumulation, rainIntensity);
-            const rainIcon = getRainIcon(rainAccumulation, rainIntensity);
-            
-            return `
-                <div class="location-card">
-                    <div class="location-header">
-                        <div class="location-name">${localityDetail.locality_name}</div>
-                        <div class="rain-status ${rainStatus.status}">${rainStatus.text}</div>
-                    </div>
-                    
-                    <div class="rain-main">
-                        <div class="rain-amount">${formatValue(rainAccumulation, 'mm', '0mm')}</div>
-                        <div class="rain-icon">${rainIcon}</div>
-                    </div>
-                    
-                    <div class="rain-details">
-                        <div class="detail-item">
-                            <span class="detail-icon">💧</span>
-                            <span>Intensity: ${formatValue(rainIntensity, '', '0')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-icon">💨</span>
-                            <span>Humidity: ${formatValue(weatherDetail.humidity, '%', '--')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-icon">🌡️</span>
-                            <span>Temperature: ${formatValue(weatherDetail.temperature ? Math.round(weatherDetail.temperature) : null, '°C', '--')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-icon">🌪️</span>
-                            <span>Wind: ${formatValue(weatherDetail.wind_speed, ' m/s', '--')}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="rain-details">
-                        <div class="detail-item">
-                            <span class="detail-icon">📍</span>
-                            <span>Lat: ${localityDetail.latitude.toFixed(4)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-icon">📍</span>
-                            <span>Lng: ${localityDetail.longitude.toFixed(4)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-icon">🏭</span>
-                            <span>PM 2.5: ${formatValue(weatherDetail.aqi_pm_2_point_5, '', '--')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-icon">🏭</span>
-                            <span>PM 10: ${formatValue(weatherDetail.aqi_pm_10, '', '--')}</span>
-                        </div>
-                    </div>
+       // Replace this part only inside the <script> tag:
+function createLocationCard(locality, weatherDetail) {
+    const localityDetail = locality.locality_detail;
+
+    // Guard clause: skip if required data is missing
+    if (!localityDetail || !weatherDetail) return '';
+
+    const rainAccumulation = weatherDetail.rain_accumulation || 0;
+    const rainIntensity = weatherDetail.rain_intensity || 0;
+    const rainStatus = getRainStatus(rainAccumulation, rainIntensity);
+    const rainIcon = getRainIcon(rainAccumulation, rainIntensity);
+
+    return `
+        <div class="location-card">
+            <div class="location-header">
+                <div class="location-name">${localityDetail.locality_name || 'Unknown'}</div>
+                <div class="rain-status ${rainStatus.status}">${rainStatus.text}</div>
+            </div>
+
+            <div class="rain-main">
+                <div class="rain-amount">${formatValue(rainAccumulation, 'mm', '0mm')}</div>
+                <div class="rain-icon">${rainIcon}</div>
+            </div>
+
+            <div class="rain-details">
+                <div class="detail-item">
+                    <span class="detail-icon">💧</span>
+                    <span>Intensity: ${formatValue(rainIntensity, '', '0')}</span>
                 </div>
-            `;
-        }
+                <div class="detail-item">
+                    <span class="detail-icon">💨</span>
+                    <span>Humidity: ${formatValue(weatherDetail.humidity, '%', '--')}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-icon">🌡️</span>
+                    <span>Temperature: ${formatValue(weatherDetail.temperature ? Math.round(weatherDetail.temperature) : null, '°C', '--')}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-icon">🌪️</span>
+                    <span>Wind: ${formatValue(weatherDetail.wind_speed, ' m/s', '--')}</span>
+                </div>
+            </div>
+
+            <div class="rain-details">
+                <div class="detail-item">
+                    <span class="detail-icon">📍</span>
+                    <span>Lat: ${typeof localityDetail.latitude === 'number' ? localityDetail.latitude.toFixed(4) : '--'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-icon">📍</span>
+                    <span>Lng: ${typeof localityDetail.longitude === 'number' ? localityDetail.longitude.toFixed(4) : '--'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-icon">🏭</span>
+                    <span>PM 2.5: ${formatValue(weatherDetail.aqi_pm_2_point_5, '', '--')}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-icon">🏭</span>
+                    <span>PM 10: ${formatValue(weatherDetail.aqi_pm_10, '', '--')}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
 
         // Update summary statistics
         function updateSummary(localities) {
